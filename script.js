@@ -1,8 +1,23 @@
 var idCounter = 0;
+const color = "white";
+
+var backgroundImage = new Image();
+var bombImage = new Image();
+backgroundImage.src = "assets/images/space.png";
+bombImage.src = "assets/images/bomb.png";
+var backgroundImageLoaded = false;
+var bombImageLoaded = false;
+backgroundImage.onload = () => backgroundImageLoaded = true;
+bombImage.onload = () => bombImageLoaded = true;
 
 function MapRange(inValue, inMin, inMax, outMin, outMax)
 {
     return (inValue - inMin) / (inMax - inMin) * (outMax - outMin) + outMin;
+}
+
+function Lerp(from, to, amount)
+{
+    return from * (1 - amount) + to * amount;
 }
 
 class Vector2
@@ -28,10 +43,11 @@ class Circle
 
     Draw(context)
     {
-        context.fillStyle = "black";
+        context.fillStyle = color;
         context.beginPath();
         context.arc(this.position.x, this.position.y, this.radius, 0, 2 * Math.PI);
-        context.stroke();
+        context.closePath();
+        context.fill();
     }
 
     Update(circles)
@@ -136,6 +152,7 @@ class PlayerCircle extends Circle
         // Gravity.
         this.acceleration.y = .02;
 
+        this.jumpForce = 3;
         this.leftPressed = false;
         this.rightPressed = false;
 
@@ -145,6 +162,8 @@ class PlayerCircle extends Circle
 
             if (event.keyCode == 37) this.leftPressed = true;
             if (event.keyCode == 39) this.rightPressed = true;
+
+            if (event.keyCode == 32) this.velocity.y = -this.jumpForce;
         });
 
         document.addEventListener("keyup", event =>
@@ -158,10 +177,26 @@ class PlayerCircle extends Circle
 
     Update(circles)
     {
-        if (this.leftPressed) this.velocity.x = -2;
-        if (this.rightPressed) this.velocity.x = 2;
+        if (this.leftPressed) this.velocity.x = Lerp(this.velocity.x, -2, .05);
+        if (this.rightPressed) this.velocity.x = Lerp(this.velocity.x, 2, .05);
 
         super.Update(circles);
+    }
+}
+
+class BombCircle extends Circle
+{
+    constructor(position)
+    {
+        super(position, 40);
+    }
+
+    Draw(context)
+    {
+        // This is image dependant.
+        // If you change image, you need to update this.
+        if (bombImageLoaded)
+            context.drawImage(bombImage, this.position.x - this.radius * 1.05, this.position.y - this.radius * 2.1, this.radius * 3, this.radius * 3.5);
     }
 }
 
@@ -178,10 +213,15 @@ const playerCircleId = playerCircle.id;
 circles.push(playerCircle);
 
 for (var i = 0; i < canvas.width / 10; i++)
-    circles.push(new Circle(new Vector2(i * 10, 400 + Math.sin(i * .1) * 100), 10));
+    circles.push(new Circle(new Vector2(i * 10, Math.sin(i * .1) * 200), 10));
 
-for (var i = 0; i < 10; i++)
-    circles.push(new BeachballCircle(new Vector2(i * canvas.width / 10, 0), 10));
+for (var i = 0; i < canvas.width / 10; i++)
+    circles.push(new Circle(new Vector2(i * 10, 200 + Math.sin(i * .1) * 100), 10));
+
+for (var i = 0; i < 5; i++)
+    circles.push(new BeachballCircle(new Vector2(Math.random() * canvas.width, Math.random() / canvas.height / 2), Math.random() * 20));
+
+circles.push(new BombCircle(new Vector2(200, 0)));
 
 setInterval(() =>
 {
@@ -204,11 +244,27 @@ setInterval(() =>
         return circle.id == playerCircleId;
     }).position;
 
+    // Draw background.
+    if (backgroundImageLoaded)
+    {
+        const width = backgroundImage.naturalWidth;
+        const height = backgroundImage.naturalHeight;
+        
+        const offset = new Vector2(-playerCirclePosition.x / 4, -playerCirclePosition.y / 4);
+
+        for (var x = 0; x < Math.ceil(canvas.width / width) + 1; x++)
+        {
+            for (var y = 0; y < Math.ceil(canvas.height / height) + 1; y++)
+            {
+                context.drawImage(backgroundImage, (x - Math.ceil(offset.x / width)) * width + offset.x, (y - Math.ceil(offset.y / height)) * height + offset.y);
+            }
+        }
+    }
+
     // Camera effect.
     context.translate(-playerCirclePosition.x + canvas.width / 2, -playerCirclePosition.y + canvas.height / 2);
 
-    // Draw.
-    
+    // Draw circles.
     circles.forEach(circle =>
     {
         circle.Draw(context);
